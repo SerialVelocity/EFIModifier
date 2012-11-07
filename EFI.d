@@ -1,14 +1,14 @@
 module EFI;
 
 private {
-  import std.file : read;
-  import std.stream : MemoryStream;
+  import std.file      : read, write;
   import std.exception : enforce;
-  import std.bitmanip : bitfields;
   import std.algorithm : reduce;
-  import std.conv : to;
-  import std.string : format;
-  import std.stdio : stderr;
+  import std.conv      : to;
+  import std.string    : format;
+  import std.stdio     : stderr;
+  import std.zlib      : crc32;
+  import Utils         : toStruct, fromStruct, calculateChecksum;
 
   EFIGUID ZeroGUID     = EFIGUID(0x00000000, 0x0000, 0x0000, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   EFIGUID PadGUID      = EFIGUID(0xFFFFFFFF, 0xFFFF, 0xFFFF, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
@@ -18,9 +18,21 @@ private {
 
   uint sectionAlignment = 4;
   uint fileAlignment    = 8;
+
+  extern(C) int TianoDecompress(void *src, uint srcSize, void *dst, uint dstSize, void *scratch, uint scratchSize);
+  extern(C) int TianoCompress(void *src, uint srcSize, void *dst, uint *dstSize);
 }
 
+import EFIHeaders;
+
 class EFI {
+  static ubyte[] getBinary(EFIContainer[] containers) {
+    ubyte[] data;
+    foreach(ref container; containers)
+      data ~= container.getBinary();
+    return data;
+  }
+
   static EFIContainer[] parse(string filename) {
     return parse(cast(ubyte[])read(filename));
   }
@@ -89,38 +101,29 @@ abstract class EFIContainer {
   size_t offset;
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0);
+  ubyte[] getBinary();
   @property size_t length();
   @property string name();
 }
 
-struct CapsuleHeader {
-  struct {
-    EFIGUID guid;
-    uint    headerSize;
-    uint    flags;
-    uint    imageSize;
-    uint    seqNum;
-    EFIGUID instanceID;
-    uint    offsetToSplitInfo;
-    uint    offsetToCapsuleBody;
-    uint    offsetToOemHeader;
-    uint    offsetToAuthorInfo;
-    uint    offsetToRevInfo;
-    uint    offsetToShortDesc;
-    uint    offsetToLongDesc;
-    uint    offsetToApplicableDevices;
-  }
-}
-
 class Capsule : EFIContainer {
   CapsuleHeader header;
+  ubyte[] original;
+
+  override
+  ubyte[] getBinary() {
+    ubyte[] data = fromStruct(&header, header.sizeof);
+    data        ~= EFI.getBinary(containers);
+    data        ~= padding;
+    return data;
+  }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     auto capsule = new Capsule();
     capsule.offset = offset;
-    capsule.header = *cast(CapsuleHeader*)(data[0..header.sizeof].ptr);
+    toStruct(data, &capsule.header, header.sizeof);
 
     enforce(capsule.header.guid == CapsuleGUID);
     enforce(capsule.header.headerSize == header.sizeof);
@@ -143,6 +146,15 @@ class Capsule : EFIContainer {
 
 class Padding : EFIContainer {
   size_t len;
+
+  override
+  ubyte[] getBinary() {
+    ubyte[] data = new ubyte[len];
+    foreach(ref ch; data)
+      ch = 0xFF;
+
+    return data ~ padding;
+  }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     auto padding = new Padding();
@@ -173,6 +185,11 @@ class Padding : EFIContainer {
 class Unknown : EFIContainer {
   ubyte[] data;
 
+  override
+  ubyte[] getBinary() {
+    return data ~ padding;
+  }
+
   static auto parse(ubyte[] data, size_t offset = 0) {
     auto unknown = new Unknown();
     unknown.offset = offset;
@@ -191,38 +208,36 @@ class Unknown : EFIContainer {
   }
 }
 
-struct VolumeHeader {
-  EFIGUID  zeroes;
-  EFIGUID  guid;
-  ulong    volumeSize;
-  char[4]  signature;
-  uint     attribs;
-  ushort   headerSize;
-  ushort   checksum;
-  ubyte[3] reserved;
-  ubyte    revision;
-}
-
-struct Block {
-  int numBlocks;
-  int blockLength;
-
-  bool isTerminator() {
-    return numBlocks == 0 && blockLength == 0;
-  }
-}
-
 class Volume : EFIContainer {
   VolumeHeader header;
   Block[] blocks;
   ubyte[] data;
+
+  override
+  ubyte[] getBinary() {
+    header.checksum = 0x0000;
+    ubyte[] data = fromStruct(&header, header.sizeof);
+    foreach(block; blocks)
+      data ~= fromStruct(&block, block.sizeof);
+
+    ubyte[] tail;
+    if(header.guid != VolumeGUID)
+      tail = this.data;
+    else
+      tail = EFI.getBinary(containers);
+
+    auto checksum = calculateChecksum!ushort(data.ptr, data.length);
+    (cast(VolumeHeader*)data).checksum = checksum;
+
+    return data ~ tail;
+  }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     auto volume = new Volume();
     volume.offset = offset;
-    volume.header = *cast(VolumeHeader*)(data[0..header.sizeof].ptr);
+    toStruct(data, &volume.header, header.sizeof);
 
     enforce(volume.header.zeroes     == ZeroGUID);
     //enforce(volume.header.guid       == VolumeGUID
@@ -232,7 +247,8 @@ class Volume : EFIContainer {
     size_t pos = header.sizeof;
     do {
       enforce(data.length - pos >= Block.sizeof);
-      volume.blocks ~= *cast(Block*)(data[pos..pos + Block.sizeof].ptr);
+      volume.blocks ~= Block();
+      toStruct(data[pos..pos + Block.sizeof], &volume.blocks[$-1], Block.sizeof);
       pos += Block.sizeof;
     } while(!volume.blocks[$-1].isTerminator());
 
@@ -260,39 +276,48 @@ class Volume : EFIContainer {
   }
 }
 
-enum FileType : ubyte {
-  Raw                 = 0x01,
-  Freeform            = 0x02,
-  SecurityCore        = 0x03,
-  PeiCore             = 0x04,
-  PxeCore             = 0x05,
-  PeiM                = 0x06,
-  Driver              = 0x07,
-  CombinedPeiMDriver  = 0x08,
-  Application	      = 0x09,
-  FirmwareVolumeImage = 0x0B,
-  FfsPad	      = 0xF0,
-}
-
-struct FileHeader {
-  EFIGUID guid;
-  ushort  checksum;
-  FileType type;
-  ubyte attribs;
-  mixin(bitfields!(uint,  "fileSize" , 24,
-		   ubyte, "state", 8));
-}
-
 class File : EFIContainer {
   FileHeader header;
   ubyte[] data;
+
+  override
+  ubyte[] getBinary() {
+    auto state = header.state;
+
+    header.state    = 0;
+    header.checksum = 0;
+
+    ubyte[] data = fromStruct(&header, header.sizeof);
+
+    ubyte[] tail;
+    switch(header.type) {
+    case FileType.FirmwareVolumeImage:
+    case FileType.Driver:
+    case FileType.PxeCore:
+    case FileType.PeiM:
+    case FileType.Raw:
+      tail = EFI.getBinary(containers);
+      break;
+    default:
+      tail = this.data;
+      break;
+    }
+
+    ubyte headCheck = calculateChecksum!ubyte(data.ptr, data.length);
+    ubyte tailCheck = calculateChecksum!ubyte(tail.ptr, tail.length);
+
+    (cast(FileHeader*)data).checksum = (tailCheck << 8) | headCheck;
+    (cast(FileHeader*)data).state    = state;
+
+    return data ~ tail ~ padding;
+  }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     auto file = new File();
     file.offset = offset;
-    file.header = *cast(FileHeader*)(data[0..header.sizeof].ptr);
+    toStruct(data, &file.header, header.sizeof);
 
     enforce(file.header.guid != CapsuleGUID);
     enforce(file.header.guid != VolumeGUID);
@@ -327,45 +352,34 @@ class File : EFIContainer {
   }
 }
 
-enum SectionType : ubyte {
-  All                 = 0,
-  Compressed          = 1,
-  GUIDDefined         = 2,
-  PE32                = 0x10,
-  PIC                 = 0x11,
-  TE                  = 0x12,
-  DxeDepex            = 0x13,
-  Version             = 0x14,
-  UserInterface       = 0x15,
-  Compatibility16     = 0x16,
-  FirmwareVolumeImage = 0x17,
-  FreeformSubtypeGUID = 0x18,
-  Raw                 = 0x19,
-  PeiDepex            = 0x1B
-}
-
-struct SectionHeader {
-  mixin(bitfields!(uint,        "fileSize" , 24,
-		   SectionType, "type",      8));
-}
-
-enum CompressionType : ubyte{
-  None     = 0x00,
-  Standard = 0x01
-}
-
-align(1)
-struct CompressedSectionHeader {
-  uint uncompressedLength;
-  CompressionType type;
-}
-
-extern(C) int EfiDecompress(void *src, uint srcSize, void *dst, uint dstSize, void *scratch, uint scratchSize);
-extern(C) int TianoDecompress(void *src, uint srcSize, void *dst, uint dstSize, void *scratch, uint scratchSize);
-
 class CompressedSection : Section {
   CompressedSectionHeader header2;
   ubyte[] uncompressed;
+
+  override
+  ubyte[] getBinary() {
+    ubyte[] data = fromStruct(&header, header.sizeof);
+    data        ~= fromStruct(&header2, header2.sizeof);
+
+    ubyte[] uncompressedData = EFI.getBinary(containers);
+    enforce(uncompressed.length == uncompressedData.length);
+
+    switch(header2.type) {
+    case CompressionType.Standard:
+      uint len = cast(uint)uncompressedData.length;
+      ubyte[] compressedData = new ubyte[len];
+      enforce(TianoCompress(uncompressedData.ptr, len, compressedData.ptr, &len) == 0);
+      data ~= compressedData[0..len];
+      break;
+    case CompressionType.None:
+      data ~= uncompressedData;
+      break;
+    default:
+      throw new Exception("Unknown compression!");
+    }
+    data ~= padding;
+    return data;
+  }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
@@ -374,8 +388,8 @@ class CompressedSection : Section {
     CompressedSection section = new CompressedSection();
     section.offset = offset;
 
-    section.header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
-    section.header2 = *cast(CompressedSectionHeader*)(data[header.sizeof..dataStart].ptr);
+    toStruct(data, &section.header, header.sizeof);
+    toStruct(data[header.sizeof..dataStart], &section.header2, header2.sizeof);
     enforce(section.header.fileSize <= data.length);
 
     switch(section.header2.type) {
@@ -392,20 +406,24 @@ class CompressedSection : Section {
       throw new Exception("Unknown compression!");
     }
 
-    section.containers ~= EFI.parse(section.uncompressed, 0, 1);
+    section.containers = EFI.parse(section.uncompressed, 0, 1);
     return section;
   }
 }
 
-struct ExtendedSectionHeader {
-  EFIGUID guid;
-  ushort offset;
-  ushort attribs;
-  uint crc32;
-}
-
 class ExtendedSection : Section {
   ExtendedSectionHeader header2;
+
+  override
+  ubyte[] getBinary() {
+    ubyte[] tail = EFI.getBinary(containers) ~ padding;
+    header2.crc32 = crc32(0, tail);
+
+    ubyte[] data = fromStruct(&header, header.sizeof);
+    data        ~= fromStruct(&header2, header2.sizeof);
+    data        ~= tail;
+    return data;
+  }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
@@ -414,8 +432,8 @@ class ExtendedSection : Section {
     ExtendedSection section = new ExtendedSection();
     section.offset = offset;
 
-    section.header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
-    section.header2 = *cast(ExtendedSectionHeader*)(data[header.sizeof..dataStart].ptr);
+    toStruct(data, &section.header, header.sizeof);
+    toStruct(data[header.sizeof..dataStart], &section.header2, header2.sizeof);
     enforce(section.header.fileSize <= data.length);
 
     section.containers = EFI.parse(data[section.header2.offset..section.header.fileSize], offset + dataStart, 1);
@@ -426,12 +444,18 @@ class ExtendedSection : Section {
 class RawSection : Section {
   ubyte[] data;
 
+  override
+  ubyte[] getBinary() {
+    return fromStruct(&header, header.sizeof) ~ data ~ padding;
+  }
+
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     RawSection section = new RawSection();
     section.offset = offset;
-    section.header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
+
+    toStruct(data, &section.header, header.sizeof);
     section.data   = data[header.sizeof..section.header.fileSize];
     return section;
   }
@@ -441,12 +465,17 @@ class UserInterfaceSection : Section {
   string fileName;
   ubyte[] data;
 
+  override
+  ubyte[] getBinary() {
+    return fromStruct(&header, header.sizeof) ~ data ~ padding;
+  }
+
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     UserInterfaceSection section = new UserInterfaceSection();
     section.offset   = offset;
-    section.header   = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
+    toStruct(data, &section.header, header.sizeof);
     section.data     = data[header.sizeof..section.header.fileSize];
     char[] fileName = cast(char[])(section.data);
     foreach(i, ch; fileName) {
@@ -462,12 +491,19 @@ class UserInterfaceSection : Section {
 }
 
 class FVISection : Section {
+  override
+  ubyte[] getBinary() {
+    ubyte[] data = fromStruct(&header, header.sizeof);
+    data ~= EFI.getBinary(containers);
+    return data ~ padding;
+  }
+
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     FVISection section = new FVISection();
     section.offset = offset;
-    section.header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
+    toStruct(data, &section.header, header.sizeof);
     section.containers = EFI.parse(data[header.sizeof..section.header.fileSize], offset + header.sizeof);
     return section;
   }
@@ -479,7 +515,8 @@ abstract class Section : EFIContainer {
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
-    auto header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
+    SectionHeader header;
+    toStruct(data, &header, header.sizeof);
     enforce(header.fileSize <= data.length);
 
     switch(header.type) {
@@ -508,32 +545,5 @@ abstract class Section : EFIContainer {
   @property override
   size_t length() {
     return header.fileSize;
-  }
-}
-
-struct EFIGUID {
-  uint     data1;
-  ushort   data2;
-  ushort   data3;
-  ubyte[8] data4;
-
-  this(uint data1, ushort data2, ushort data3, ubyte[8] data4) {
-    this.data1 = data1;
-    this.data2 = data2;
-    this.data3 = data3;
-    this.data4 = data4;
-  }
-
-  this(ubyte[] data) {
-    enforce(data.length >= this.sizeof);
-    auto stream = new MemoryStream(data);
-    stream.read(data1);
-    stream.read(data2);
-    stream.read(data3);
-    stream.readExact(&data4, data4.length);
-  }
-
-  string toString() {
-    return format("%08X-%04X-%04X-%02X%02X%02X%02X%02X%02X%02X%02X", data1, data2, data3, data4[0], data4[1], data4[2], data4[3], data4[4], data4[5], data4[6], data4[7]);
   }
 }

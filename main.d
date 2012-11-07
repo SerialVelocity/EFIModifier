@@ -2,6 +2,8 @@ import Console : Console;
 import EFI : EFI, EFIContainer, File, UserInterfaceSection;
 
 import std.stdio : writefln, write;
+import std.file : read;
+import std.exception : enforce;
 
 int main(string[] args) {
   Console.Init(args);
@@ -10,6 +12,9 @@ int main(string[] args) {
   auto containers = EFI.parse(file);
   debug printEFI(containers);
   printFileMapping(containers);
+  ubyte[] newEFI = EFI.getBinary(containers);
+  ubyte[] oldEFI = cast(ubyte[])read(file);
+  enforce(newEFI.length == oldEFI.length);
 
   return 0;
 }

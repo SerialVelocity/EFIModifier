@@ -11,10 +11,11 @@ git submodule update
 
 #Release
 gcc -O2 -c PMPatch/Tiano/TianoDecompress.c -o TianoDecompress.o
-dmd -release -property -w -nofloat -noboundscheck main.d EFI.d Console.d Utils.d TianoDecompress.o -ofmain.release
+gcc -O2 -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.o
+dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.o TianoCompress.o -ofmain.release
 [[ "$?" -eq 0 ]] || die "Unable to make release version"
 
 #Debug
-gcc -g -c PMPatch/Tiano/TianoDecompress.c -o TianoDecompress.o
-dmd -debug -gc -property -w main.d EFI.d Console.d Utils.d TianoDecompress.o -ofmain.debug
+gcc -g -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.o
+dmd -debug -gc -property -w main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.o TianoCompress.o -ofmain.debug
 [[ "$?" -eq 0 ]] || die "Unable to make debug version"
