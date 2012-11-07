@@ -75,7 +75,7 @@ class EFI {
       return EFI.parse(data[len..$], offset + len, parseSection, containers);
     }
     } catch(Exception e) {
-      stderr.writefln("%s (Line: %u)", e.msg, e.line);
+      stderr.writefln("WARNING: Exception caught (harmless): %s (Line: %u)", e.msg, e.line);
       //stderr.writefln("%s", e);
       containers ~= Unknown.parse(data, offset);
       return containers;
