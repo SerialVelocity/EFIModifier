@@ -306,6 +306,7 @@ class File : EFIContainer {
     case FileType.Driver:
     case FileType.PxeCore:
     case FileType.PeiM:
+    case FileType.Raw:
       file.containers = EFI.parse(file.data, offset + header.sizeof, 1);
       break;
     default:
