@@ -1,6 +1,6 @@
 *\~
 *.o
 main
-main.release
-main.debug
+main.release*
+main.debug*
 \#*\#
