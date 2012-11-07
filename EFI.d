@@ -448,7 +448,12 @@ class UserInterfaceSection : Section {
     section.offset   = offset;
     section.header   = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
     section.data     = data[header.sizeof..section.header.fileSize];
-    section.fileName = to!string(cast(char[])(section.data));
+    char[] fileName = cast(char[])(section.data);
+    foreach(i, ch; fileName) {
+      enforce(i % 2 == 0 || ch == '\0');
+      if(i % 2 == 0)
+        section.fileName ~= ch;
+    }
     return section;
   }
 }
