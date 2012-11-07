@@ -114,6 +114,7 @@ struct CapsuleHeader {
 
 class Capsule : EFIContainer {
   CapsuleHeader header;
+
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
@@ -214,6 +215,7 @@ struct Block {
 class Volume : EFIContainer {
   VolumeHeader header;
   Block[] blocks;
+  ubyte[] data;
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
@@ -234,12 +236,14 @@ class Volume : EFIContainer {
       pos += Block.sizeof;
     } while(!volume.blocks[$-1].isTerminator());
 
+    volume.data = data[pos..cast(size_t)volume.header.volumeSize];
+
     if(volume.header.guid != VolumeGUID)
       return volume;
 
     enforce(volume.header.headerSize == pos);
 
-    volume.containers = EFI.parse(data[pos..cast(size_t)volume.header.volumeSize], offset + pos);
+    volume.containers = EFI.parse(volume.data, offset + pos);
     enforce(reduce!((x, y) => x + y.length() + y.padding.length)(cast(size_t)0, volume.containers)
             == volume.header.volumeSize - pos);
     return volume;
@@ -281,6 +285,7 @@ struct FileHeader {
 
 class File : EFIContainer {
   FileHeader header;
+  ubyte[] data;
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
@@ -294,12 +299,14 @@ class File : EFIContainer {
     enforce(file.header.guid != ZeroGUID);
     enforce(file.header.fileSize <= data.length);
 
+    file.data = data[header.sizeof..file.header.fileSize];
+
     switch(file.header.type) {
     case FileType.FirmwareVolumeImage:
     case FileType.Driver:
     case FileType.PxeCore:
     case FileType.PeiM:
-      file.containers ~= EFI.parse(data[header.sizeof..file.header.fileSize], offset + header.sizeof, 1);
+      file.containers = EFI.parse(file.data, offset + header.sizeof, 1);
       break;
     default:
       break;
@@ -367,7 +374,7 @@ class CompressedSection : Section {
     section.offset = offset;
 
     section.header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
-    section.header2 = *cast(CompressedSectionHeader*)(data[section.header.sizeof..dataStart].ptr);
+    section.header2 = *cast(CompressedSectionHeader*)(data[header.sizeof..dataStart].ptr);
     enforce(section.header.fileSize <= data.length);
 
     switch(section.header2.type) {
@@ -398,7 +405,6 @@ struct ExtendedSectionHeader {
 
 class ExtendedSection : Section {
   ExtendedSectionHeader header2;
-  ubyte[] uncompressed;
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
@@ -408,34 +414,40 @@ class ExtendedSection : Section {
     section.offset = offset;
 
     section.header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
-    section.header2 = *cast(ExtendedSectionHeader*)(data[section.header.sizeof..dataStart].ptr);
+    section.header2 = *cast(ExtendedSectionHeader*)(data[header.sizeof..dataStart].ptr);
     enforce(section.header.fileSize <= data.length);
 
-    section.containers ~= EFI.parse(data[section.header2.offset..section.header.fileSize], offset + dataStart, 1);
+    section.containers = EFI.parse(data[section.header2.offset..section.header.fileSize], offset + dataStart, 1);
     return section;
   }
 }
 
 class RawSection : Section {
+  ubyte[] data;
+
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     RawSection section = new RawSection();
     section.offset = offset;
     section.header = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
+    section.data   = data[header.sizeof..section.header.fileSize];
     return section;
   }
 }
 
 class UserInterfaceSection : Section {
   string fileName;
+  ubyte[] data;
+
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
 
     UserInterfaceSection section = new UserInterfaceSection();
     section.offset   = offset;
     section.header   = *cast(SectionHeader*)(data[0..header.sizeof].ptr);
-    section.fileName = to!string(cast(char[])(data[header.sizeof..section.header.fileSize]));
+    section.data     = data[header.sizeof..section.header.fileSize];
+    section.fileName = to!string(cast(char[])(section.data));
     return section;
   }
 }
@@ -452,7 +464,7 @@ class FVISection : Section {
   }
 }
 
-class Section : EFIContainer {
+abstract class Section : EFIContainer {
   SectionHeader header;
 
   static auto parse(ubyte[] data, size_t offset = 0) {
