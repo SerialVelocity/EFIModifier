@@ -14,20 +14,22 @@ int main(string[] args) {
   return 0;
 }
 
+EFIContainer findName(EFIContainer[] containers) {
+  foreach(c; containers) {
+    if(c.name == "Section (UserInterface)")
+      return c;
+    if(c.name == "Section (GUIDDefined)" || c.name == "Section (Compressed)")
+      return findName(c.containers);
+  }
+  return null;
+}
+
 void printFileMapping(EFIContainer[] containers) {
   foreach(container; containers) {
     if(container.name[0..5] == "File ") {
-      foreach(c; container.containers) {
-	if(c.name == "Section (UserInterface)") {
-	  writefln("%s => %s", (cast(File)container).header.guid, c);
-	} else if(c.name == "Section (GUIDDefined)") {
-	  foreach(c2; c.containers) {
-	    if(c2.name == "Section (UserInterface)") {
-	      writefln("%s => %s", (cast(File)container).header.guid, (cast(UserInterfaceSection)c2).fileName);
-	    }
-	  }
-	}
-      }
+      auto name = findName(container.containers);
+      if(name !is null)
+	writefln("%s => %s", (cast(File)container).header.guid, (cast(UserInterfaceSection)name).fileName);
     }
     printFileMapping(container.containers);
   }

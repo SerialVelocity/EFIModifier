@@ -89,8 +89,8 @@ abstract class EFIContainer {
   size_t offset;
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0);
-  size_t length();
-  string name();
+  @property size_t length();
+  @property string name();
 }
 
 struct CapsuleHeader {
@@ -129,10 +129,12 @@ class Capsule : EFIContainer {
     return capsule;
   }
 
+  @property override
   string name() {
     return "Capsule";
   }
 
+  @property override
   size_t length() {
     return header.imageSize;
   }
@@ -156,10 +158,12 @@ class Padding : EFIContainer {
     return padding;
   }
 
+  @property override
   string name() {
     return "Padding";
   }
 
+  @property override
   size_t length() {
     return len;
   }
@@ -175,10 +179,12 @@ class Unknown : EFIContainer {
     return unknown;
   }
 
+  @property override
   string name() {
     return "Unknown";
   }
 
+  @property override
   size_t length() {
     return data.length;
   }
@@ -239,10 +245,12 @@ class Volume : EFIContainer {
     return volume;
   }
 
+  @property override
   string name() {
     return "Volume(" ~ to!string(header.guid) ~ ")";
   }
 
+  @property override
   size_t length() {
     return cast(size_t)header.volumeSize;
   }
@@ -300,10 +308,12 @@ class File : EFIContainer {
     return file;
   }
 
+  @property override
   string name() {
     return format("File (%s)", to!string(header.type));
   }
 
+  @property override
   size_t length() {
     return header.fileSize;
   }
@@ -369,6 +379,7 @@ class CompressedSection : Section {
       break;
     case CompressionType.None:
       section.uncompressed = data[dataStart..section.header.fileSize];
+      break;
     default:
       throw new Exception("Unknown compression!");
     }
@@ -468,10 +479,12 @@ class Section : EFIContainer {
     }
   }
 
+  @property override
   string name() {
     return format("Section (%s)", to!string(header.type));
   }
 
+  @property override
   size_t length() {
     return header.fileSize;
   }

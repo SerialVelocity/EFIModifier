@@ -1,0 +1,3 @@
+[submodule "BaseTools"]
+	path = BaseTools
+	url = git://tianocore.git.sourceforge.net/gitroot/tianocore/buildtools-BaseTools
