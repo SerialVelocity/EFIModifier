@@ -1,4 +1,6 @@
 *\~
 *.o
 main
+main.release
+main.debug
 \#*\#
