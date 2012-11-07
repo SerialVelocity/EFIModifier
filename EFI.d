@@ -451,8 +451,11 @@ class UserInterfaceSection : Section {
     char[] fileName = cast(char[])(section.data);
     foreach(i, ch; fileName) {
       enforce(i % 2 == 0 || ch == '\0');
-      if(i % 2 == 0)
+      if(i % 2 == 0) {
+        if(ch == '\0')
+          break;
         section.fileName ~= ch;
+      }
     }
     return section;
   }
