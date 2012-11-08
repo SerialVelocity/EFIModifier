@@ -28,8 +28,15 @@ import EFIHeaders;
 class EFI {
   static ubyte[] getBinary(EFIContainer[] containers) {
     ubyte[] data;
-    foreach(ref container; containers)
+
+    foreach(ref container; containers[0..$-1])
       data ~= container.getBinary();
+
+    if(typeid(containers[$-1]) != typeid(Padding))
+      data ~= containers[$-1].getBinary();
+    else
+      data ~= (cast(Padding)containers[$-1]).getBinary(data.length);
+
     return data;
   }
 
@@ -118,7 +125,7 @@ class Capsule : EFIContainer {
     enforce(capsule.header.headerSize == header.sizeof);
     enforce(capsule.header.imageSize == data.length);
 
-    capsule.containers = EFI.parse(data[header.sizeof..$], offset + header.sizeof);
+    capsule.containers = EFI.parse(data[header.sizeof..$], 0);
     return capsule;
   }
 
@@ -143,7 +150,16 @@ class Padding : EFIContainer {
 
   override
   ubyte[] getBinary() {
+    enforce(this.offset == 0);
     ubyte[] data = new ubyte[len];
+    foreach(ref ch; data)
+      ch = 0xFF;
+
+    return data ~ padding;
+  }
+
+  ubyte[] getBinary(size_t offset) {
+    ubyte[] data = new ubyte[this.offset + len - offset];
     foreach(ref ch; data)
       ch = 0xFF;
 
@@ -266,7 +282,7 @@ class Volume : EFIContainer {
 
     enforce(volume.header.headerSize == pos);
 
-    volume.containers = EFI.parse(volume.data, offset + pos);
+    volume.containers = EFI.parse(volume.data, 0);
     enforce(reduce!((x, y) => x + y.length() + y.padding.length)(cast(size_t)0, volume.containers)
             == volume.header.volumeSize - pos);
     return volume;
@@ -344,7 +360,7 @@ class File : EFIContainer {
     case FileType.PxeCore:
     case FileType.PeiM:
     case FileType.Raw:
-      file.containers = EFI.parse(file.data, offset + header.sizeof, 1);
+      file.containers = EFI.parse(file.data, 0, 1);
       break;
     default:
       break;
@@ -459,7 +475,7 @@ class ExtendedSection : Section {
     toStruct(data[header.sizeof..dataStart], &section.header2, header2.sizeof);
     enforce(section.header.fileSize <= data.length);
 
-    section.containers = EFI.parse(data[section.header2.offset..section.header.fileSize], offset + dataStart, 1);
+    section.containers = EFI.parse(data[section.header2.offset..section.header.fileSize], 0, 1);
     return section;
   }
 
@@ -532,7 +548,7 @@ class FVISection : Section {
     FVISection section = new FVISection();
     section.offset = offset;
     toStruct(data, &section.header, header.sizeof);
-    section.containers = EFI.parse(data[header.sizeof..section.header.fileSize], offset + header.sizeof);
+    section.containers = EFI.parse(data[header.sizeof..section.header.fileSize], 0);
     return section;
   }
 }
