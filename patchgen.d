@@ -1,23 +1,23 @@
 import goldie.all;
 import patch.all;
 
-import std.conv : to, parse;
-import std.file : write;
-import std.stdio : writeln, writefln;
-import Utils : fromStruct;
-
-struct Patch {
-  string name;
-  string file;
-  ubyte[] search;
-  ubyte[] replace;
-}
+import std.conv   : to, parse;
+import std.stream : BufferedFile, FileMode;
+import std.stdio  : writeln, writefln;
+import Patch      : Patch;
 
 int main(string[] args) {
   try {
-    auto parseTree = language_patch.parseFile(args[1]).parseTree;
-    auto patches   = toPatches(parseTree);
-    write(args[1] ~ ".bin", fromStruct(patches.ptr, patches.length * Patch.sizeof));
+    auto parseTree    = language_patch.parseFile(args[1]).parseTree;
+    auto patches      = toPatches(parseTree);
+    BufferedFile file = new BufferedFile(args[1] ~ ".bin", FileMode.OutNew);
+
+    foreach(patch; patches) {
+      ubyte[] bin = patch.toBinary();
+      file.writeExact(bin.ptr, bin.length);
+    }
+    file.close();
+
   } catch(ParseException e) {
     writeln(e.msg);
     return 1;

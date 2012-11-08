@@ -1,6 +1,9 @@
 *\~
 *.o
+.\#*
 main
-main.release*
-main.debug*
+*.release*
+*.debug*
+patch
 \#*\#
+*.cgt

@@ -44,7 +44,7 @@ void toStruct(ubyte[] data, void *ptr, size_t len) {
   stream.readExact(ptr, len);
 }
 
-ubyte[] fromStruct(void *ptr, size_t len) {
+ubyte[] fromStruct(const void *ptr, size_t len) {
   ubyte[] copy = new ubyte[len];
   copy[] = (cast(ubyte*)ptr)[0..len];
   return copy;

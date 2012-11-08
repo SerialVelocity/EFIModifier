@@ -12,12 +12,15 @@ int main(string[] args) {
 
   auto containers = EFI.parse(file);
   debug printEFI(containers);
-  printFileMapping(containers);
-  //modCheck(containers);
+  debug printFileMapping(containers);
+
+  //Sanity check
   ubyte[] newEFI = EFI.getBinary(containers);
   ubyte[] oldEFI = cast(ubyte[])read(file);
   enforce(newEFI.length == oldEFI.length);
   enforce(newEFI == oldEFI);
+
+  string patchfile = Console.GetInput!string("Please enter a patch filename");
 
   return 0;
 }
