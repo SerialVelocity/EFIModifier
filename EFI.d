@@ -159,6 +159,7 @@ class Padding : EFIContainer {
   }
 
   ubyte[] getBinary(size_t offset) {
+    enforce(this.offset + len - offset >= 0);
     ubyte[] data = new ubyte[this.offset + len - offset];
     foreach(ref ch; data)
       ch = 0xFF;
