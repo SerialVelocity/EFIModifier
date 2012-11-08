@@ -1,0 +1,39 @@
+! Grammar for patch files.
+"Name"            = 'Patch file parser'
+"Author"          = 'Ben Grabham'
+"Version"         = '0.01'
+"About"           = 'Parses patch files'
+
+"Case Sensitive"  = true
+
+"Start Symbol"    = <ListOfPatches>
+
+! -- Char Sets ---------
+{HexChar} = {Digit} + [ABCDEF]
+{Char}    = {Printable} - ["]
+{NChar}   = {Printable} - {Whitespace} - [",]
+
+! -- Terminals ---------
+
+HexByte = '0' [xX] {HexChar} {HexChar}
+!        | {HexChar} {HexChar} [hH]
+
+String  = '"' {Char}* '"'
+NString = {NChar}+
+
+! -- Rules     ---------
+<ListHex>       ::= '[' <InnerListHex> ']'
+
+<InnerListHex>  ::= <InnerListHex> ',' HexByte
+                  | HexByte
+
+<ListOfPatches> ::= <ListOfPatches> <Patch>
+                  | <Patch>
+
+<Patch>         ::= '{' <InnerPatch> '}'
+
+<InnerPatch>    ::= <InnerPatch> <Header>
+                  | <Header>
+
+<Header>        ::= NString '=' String
+                  | NString '=' <ListHex>

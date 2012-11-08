@@ -6,16 +6,18 @@ die () {
     exit 1
 }
 
-git submodule init
-git submodule update
+#Debug patcher
+rdmd -debug -gc -w -ofpatchgen.debug --build-only -ISemiTwistDTools/src -IGoldie/src patchgen.d
+[[ "$?" -eq 0 ]] || echo "Unable to make debug version"
+
+#Release patcher
+rdmd -release -w -nofloat -noboundscheck -ofpatchgen.release --build-only -ISemiTwistDTools/src -IGoldie/src patchgen.d
+[[ "$?" -eq 0 ]] || echo "Unable to make release version"
+
+#Debug main
+dmd -debug -gc -property -w main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o TianoCompress.debug.o -ofmain.debug
+[[ "$?" -eq 0 ]] || echo "Unable to make debug version"
 
 #Release
-gcc -O2 -c PMPatch/Tiano/TianoDecompress.c -o TianoDecompress.o
-gcc -O2 -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.o
-dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.o TianoCompress.o -ofmain.release
-[[ "$?" -eq 0 ]] || die "Unable to make release version"
-
-#Debug
-gcc -g -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.o
-dmd -debug -gc -property -w main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.o TianoCompress.o -ofmain.debug
-[[ "$?" -eq 0 ]] || die "Unable to make debug version"
+dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o TianoCompress.debug.o -ofmain.release
+[[ "$?" -eq 0 ]] || echo "Unable to make release version"

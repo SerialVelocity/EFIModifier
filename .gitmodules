@@ -1,3 +1,9 @@
 [submodule "PMPatch"]
 	path = PMPatch
 	url = git://github.com/NikolajSchlej/PMPatch
+[submodule "SemiTwistDTools"]
+	path = SemiTwistDTools
+	url = https://bitbucket.org/Abscissa/semitwistdtools.git
+[submodule "Goldie"]
+	path = Goldie
+	url = https://bitbucket.org/Abscissa/goldie.git
