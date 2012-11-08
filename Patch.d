@@ -5,6 +5,26 @@ private {
   import Utils    : toStruct, fromStruct;
 }
 
+enum PatchTokenType {
+  OpenCurly,
+  CloseCurly,
+  OpenSquare,
+  CloseSquare,
+  Equals,
+  Comma,
+  String,
+  Keyword
+}
+
+struct PatchToken {
+  PatchTokenType type;
+  string str;
+  this(PatchTokenType type, string str = "") {
+    this.type = type;
+    this.str = str;
+  }
+}
+
 struct Patch {
   string name;
   string file;
