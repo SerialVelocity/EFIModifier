@@ -30,5 +30,5 @@ dmd -debug -gc -property -w main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDec
 [[ "$?" -eq 0 ]] || echo "Unable to make debug version"
 
 echo "Building release patcher"
-dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o -ofmain.release
+dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofmain.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
