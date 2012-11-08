@@ -95,17 +95,6 @@ class EFI {
   }
 }
 
-abstract class EFIContainer {
-  EFIContainer[] containers;
-  ubyte[] padding;
-  size_t offset;
-
-  static EFIContainer parse(ubyte[] data, size_t offset = 0);
-  ubyte[] getBinary();
-  @property size_t length();
-  @property string name();
-}
-
 class Capsule : EFIContainer {
   CapsuleHeader header;
   ubyte[] original;
@@ -141,6 +130,11 @@ class Capsule : EFIContainer {
   @property override
   size_t length() {
     return header.imageSize;
+  }
+
+  @property override
+  EFIGUID guid() {
+    return header.guid;
   }
 }
 
@@ -180,6 +174,11 @@ class Padding : EFIContainer {
   size_t length() {
     return len;
   }
+
+  @property override
+  EFIGUID guid() {
+    return ZeroGUID;
+  }
 }
 
 class Unknown : EFIContainer {
@@ -206,6 +205,11 @@ class Unknown : EFIContainer {
   size_t length() {
     return data.length;
   }
+
+  @property override
+  EFIGUID guid() {
+    return ZeroGUID;
+  }
 }
 
 class Volume : EFIContainer {
@@ -215,21 +219,24 @@ class Volume : EFIContainer {
 
   override
   ubyte[] getBinary() {
-    header.checksum = 0x0000;
+    ubyte[] tail;
+    if(header.guid != VolumeGUID) {
+      tail = this.data;
+    } else {
+      tail = EFI.getBinary(containers);
+
+      header.checksum = 0x0000;
+      auto checksum  = calculateChecksum!ushort(&header, header.sizeof);
+      foreach(block; blocks)
+	checksum = calculateChecksum!ushort(&block, block.sizeof, checksum);
+      header.checksum = checksum;
+    }
+
     ubyte[] data = fromStruct(&header, header.sizeof);
     foreach(block; blocks)
       data ~= fromStruct(&block, block.sizeof);
 
-    ubyte[] tail;
-    if(header.guid != VolumeGUID)
-      tail = this.data;
-    else
-      tail = EFI.getBinary(containers);
-
-    auto checksum = calculateChecksum!ushort(data.ptr, data.length);
-    (cast(VolumeHeader*)data).checksum = checksum;
-
-    return data ~ tail;
+    return data ~ tail ~ padding;
   }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
@@ -273,6 +280,11 @@ class Volume : EFIContainer {
   @property override
   size_t length() {
     return cast(size_t)header.volumeSize;
+  }
+
+  @property override
+  EFIGUID guid() {
+    return header.guid;
   }
 }
 
@@ -350,6 +362,11 @@ class File : EFIContainer {
   size_t length() {
     return header.fileSize;
   }
+
+  @property override
+  EFIGUID guid() {
+    return header.guid;
+  }
 }
 
 class CompressedSection : Section {
@@ -358,26 +375,32 @@ class CompressedSection : Section {
 
   override
   ubyte[] getBinary() {
-    ubyte[] data = fromStruct(&header, header.sizeof);
-    data        ~= fromStruct(&header2, header2.sizeof);
-
     ubyte[] uncompressedData = EFI.getBinary(containers);
     enforce(uncompressed.length == uncompressedData.length);
 
+    ubyte[] tail;
     switch(header2.type) {
     case CompressionType.Standard:
       uint len = cast(uint)uncompressedData.length;
+      header2.uncompressedLength = len;
       ubyte[] compressedData = new ubyte[len];
       enforce(TianoCompress(uncompressedData.ptr, len, compressedData.ptr, &len) == 0);
-      data ~= compressedData[0..len];
+      tail = compressedData[0..len];
       break;
     case CompressionType.None:
-      data ~= uncompressedData;
+      header2.uncompressedLength = cast(uint)uncompressedData.length;
+      tail = uncompressedData;
       break;
     default:
       throw new Exception("Unknown compression!");
     }
-    data ~= padding;
+
+    header.fileSize(cast(uint)(header.sizeof + header2.sizeof + tail.length + padding.length));
+
+    ubyte[] data = fromStruct(&header, header.sizeof);
+    data        ~= fromStruct(&header2, header2.sizeof);
+    data        ~= tail;
+    data        ~= padding;
     return data;
   }
 
@@ -438,6 +461,11 @@ class ExtendedSection : Section {
 
     section.containers = EFI.parse(data[section.header2.offset..section.header.fileSize], offset + dataStart, 1);
     return section;
+  }
+
+  @property override
+  EFIGUID guid() {
+    return header2.guid;
   }
 }
 
@@ -545,5 +573,10 @@ abstract class Section : EFIContainer {
   @property override
   size_t length() {
     return header.fileSize;
+  }
+
+  @property override
+  EFIGUID guid() {
+    return ZeroGUID;
   }
 }
