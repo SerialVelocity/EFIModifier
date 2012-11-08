@@ -1,8 +1,9 @@
 import Console : Console;
-import EFI : EFI, EFIContainer, EFIGUID, File, RawSection, ExtendedSection, CompressedSection, UserInterfaceSection;
+import Patch   : Patch;
+import EFI     : EFI, EFIContainer, EFIGUID, File, RawSection, ExtendedSection, CompressedSection, UserInterfaceSection;
 
 import std.stdio : writefln, write;
-import std.file : read;
+import std.file : read, filewrite = write;
 import std.exception : enforce;
 import std.string : format;
 
@@ -18,11 +19,47 @@ int main(string[] args) {
   ubyte[] newEFI = EFI.getBinary(containers);
   ubyte[] oldEFI = cast(ubyte[])read(file);
   enforce(newEFI.length == oldEFI.length);
-  enforce(newEFI == oldEFI);
+  debug enforce(newEFI == oldEFI);
 
+  string outfile   = Console.GetInput!string("Please enter an output filename");
   string patchfile = Console.GetInput!string("Please enter a patch filename");
+  Patch[] patches  = Patch.fromBinary(cast(ubyte[])read(patchfile));
+  patch(containers, patches);
+  ubyte[] modEFI = EFI.getBinary(containers);
+  enforce(modEFI.length == oldEFI.length);
+  filewrite(outfile, modEFI);
 
   return 0;
+}
+
+void patch(EFIContainer[] containers, Patch[] patches) {
+  foreach(container; containers) {
+    if(typeid(container) == typeid(File)) {
+      auto name = findName(container.containers);
+      auto raw  = findRaw(container.containers);
+
+      if(name !is null) {
+	auto filename = (cast(UserInterfaceSection)name).fileName;
+	foreach(patch; patches) {
+	  if(filename == patch.file) {
+	    uint found = 0;
+	    writefln("%s - Patching %s...", patch.name, filename);
+	    foreach(i; 0..raw.data.length - patch.search.length) {
+	      if(raw.data[i..i + patch.search.length] == patch.search) {
+		++found;
+		raw.data[i..i + patch.search.length] = patch.replace;
+	      }
+	    }
+	    if(found)
+	      writefln("%s - Done", patch.name);
+	    else
+	      writefln("%s - Failed", patch.name);
+	  }
+	}
+      }
+    }
+    patch(container.containers, patches);
+  }
 }
 
 RawSection findRaw(EFIContainer[] containers) {
