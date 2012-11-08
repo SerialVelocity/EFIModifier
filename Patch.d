@@ -32,11 +32,14 @@ struct Patch {
     return data;
   }
 
-  static Patch fromBinary(ubyte[] data) {
+  static Patch[] fromBinary(ubyte[] data) {
     Patch patch;
     uint len;
     size_t offset = 0;
     char[] name, file;
+
+    if(data.length == 0)
+      return [];
 
     toStruct(data[offset..$], &len, len.sizeof);
     offset += len.sizeof;
@@ -64,6 +67,6 @@ struct Patch {
     toStruct(data[offset..$], patch.replace.ptr, len);
     offset += len;
 
-    return patch;
+    return patch ~ fromBinary(data[offset..$]);
   }
 }

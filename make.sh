@@ -15,9 +15,9 @@ rdmd -release -w -nofloat -noboundscheck -ofpatchgen.release --build-only -ISemi
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
 
 #Debug main
-dmd -debug -gc -property -w main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o TianoCompress.debug.o -ofmain.debug
+dmd -debug -gc -property -w main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofmain.debug
 [[ "$?" -eq 0 ]] || echo "Unable to make debug version"
 
 #Release
-dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o TianoCompress.debug.o -ofmain.release
+dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o -ofmain.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
