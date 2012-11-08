@@ -16,8 +16,10 @@ private {
   EFIGUID VolumeGUID   = EFIGUID(0x7A9354D9, 0x0468, 0x444A, [0x81, 0xCE, 0x0B, 0xF6, 0x17, 0xD8, 0x90, 0xDF]);
   EFIGUID NVVolumeGUID = EFIGUID(0xFFF12B8D, 0x7696, 0x4C8B, [0xA9, 0x85, 0x27, 0x47, 0x07, 0x5B, 0x4F, 0x50]);
 
-  uint sectionAlignment = 4;
-  uint fileAlignment    = 8;
+  const uint  sectionAlignment = 4;
+  const ubyte sectionPadFill   = 0x00;
+  const uint  fileAlignment    = 8;
+  const ubyte filePadFill      = 0xFF;
 
   extern(C) int TianoDecompress(void *src, uint srcSize, void *dst, uint dstSize, void *scratch, uint scratchSize);
   extern(C) int TianoCompress(void *src, uint srcSize, void *dst, uint *dstSize);
@@ -75,20 +77,23 @@ class EFI {
     } else {
       //Either file or section (so far)
       uint alignment = 0;
+      ubyte padFill  = 0;
       if(parseSection) {
 	containers ~= Section.parse(data, offset);
-	alignment = sectionAlignment;
+	alignment   = sectionAlignment;
+	padFill     = sectionPadFill;
       } else {
 	containers ~= File.parse(data, offset);
-	alignment = fileAlignment;
+	alignment   = fileAlignment;
+	padFill     = filePadFill;
       }
       size_t len = containers[$-1].length();
       if(len % alignment != 0 && data.length != len) {
 	size_t needed = alignment - len % alignment;
 	enforce(data.length >= len + needed);
 	containers[$-1].padding = data[len..len + needed];
-	//foreach(ref b; data[len..len + needed])
-	//  enforce(b == 0x00);
+	foreach(ref b; data[len..len + needed])
+	  enforce(b == padFill);
 	len += needed;
       }
       return EFI.parse(data[len..$], offset + len, parseSection, containers);
@@ -311,13 +316,6 @@ class File : EFIContainer {
 
   override
   ubyte[] getBinary() {
-    auto state = header.state;
-
-    header.state    = 0;
-    header.checksum = 0;
-
-    ubyte[] data = fromStruct(&header, header.sizeof);
-
     ubyte[] tail;
     switch(header.type) {
     case FileType.FirmwareVolumeImage:
@@ -332,12 +330,18 @@ class File : EFIContainer {
       break;
     }
 
-    ubyte headCheck = calculateChecksum!ubyte(data.ptr, data.length);
+    auto state = header.state;
+    header.state    = 0;
+    header.fileSize = cast(uint)(header.sizeof + tail.length);
+    header.checksum = 0;
+
+    ubyte headCheck = calculateChecksum!ubyte(&header, header.sizeof);
     ubyte tailCheck = calculateChecksum!ubyte(tail.ptr, tail.length);
 
-    (cast(FileHeader*)data).checksum = (tailCheck << 8) | headCheck;
-    (cast(FileHeader*)data).state    = state;
+    header.checksum = (tailCheck << 8) | headCheck;
+    header.state    = state;
 
+    ubyte[] data = fromStruct(&header, header.sizeof);
     return data ~ tail ~ padding;
   }
 
@@ -394,25 +398,26 @@ class CompressedSection : Section {
   ubyte[] getBinary() {
     ubyte[] uncompressedData = EFI.getBinary(containers);
     enforce(uncompressed.length == uncompressedData.length);
+    uncompressed = uncompressedData;
 
     ubyte[] tail;
     switch(header2.type) {
     case CompressionType.Standard:
-      uint len = cast(uint)uncompressedData.length;
+      uint len = cast(uint)uncompressed.length;
       header2.uncompressedLength = len;
       ubyte[] compressedData = new ubyte[len];
-      enforce(TianoCompress(uncompressedData.ptr, len, compressedData.ptr, &len) == 0);
+      enforce(TianoCompress(uncompressed.ptr, len, compressedData.ptr, &len) == 0);
       tail = compressedData[0..len];
       break;
     case CompressionType.None:
-      header2.uncompressedLength = cast(uint)uncompressedData.length;
-      tail = uncompressedData;
+      header2.uncompressedLength = cast(uint)uncompressed.length;
+      tail = uncompressed;
       break;
     default:
       throw new Exception("Unknown compression!");
     }
 
-    header.fileSize(cast(uint)(header.sizeof + header2.sizeof + tail.length + padding.length));
+    header.fileSize = cast(uint)(header.sizeof + header2.sizeof + tail.length + padding.length);
 
     ubyte[] data = fromStruct(&header, header.sizeof);
     data        ~= fromStruct(&header2, header2.sizeof);

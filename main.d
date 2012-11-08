@@ -1,9 +1,10 @@
 import Console : Console;
-import EFI : EFI, EFIContainer, EFIGUID, File, RawSection, UserInterfaceSection;
+import EFI : EFI, EFIContainer, EFIGUID, File, RawSection, ExtendedSection, CompressedSection, UserInterfaceSection;
 
 import std.stdio : writefln, write;
 import std.file : read;
 import std.exception : enforce;
+import std.string : format;
 
 int main(string[] args) {
   Console.Init(args);
@@ -16,6 +17,7 @@ int main(string[] args) {
   ubyte[] newEFI = EFI.getBinary(containers);
   ubyte[] oldEFI = cast(ubyte[])read(file);
   enforce(newEFI.length == oldEFI.length);
+  enforce(newEFI == oldEFI);
 
   return 0;
 }
@@ -75,9 +77,9 @@ void modCheck(EFIContainer[] containers) {
 
 EFIContainer findName(EFIContainer[] containers) {
   foreach(c; containers) {
-    if(c.name == "Section (UserInterface)")
+    if(typeid(c) == typeid(UserInterfaceSection))
       return c;
-    if(c.name == "Section (GUIDDefined)" || c.name == "Section (Compressed)")
+    if(typeid(c) == typeid(ExtendedSection) || typeid(c) == typeid(CompressedSection))
       return findName(c.containers);
   }
   return null;
@@ -85,7 +87,7 @@ EFIContainer findName(EFIContainer[] containers) {
 
 void printFileMapping(EFIContainer[] containers) {
   foreach(container; containers) {
-    if(container.name[0..5] == "File ") {
+    if(typeid(container) == typeid(File)) {
       auto name = findName(container.containers);
       if(name !is null)
 	writefln("%s => %s", (cast(File)container).header.guid, (cast(UserInterfaceSection)name).fileName);
