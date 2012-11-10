@@ -11,15 +11,19 @@ echo Building release tiano objects
 gcc -O2 -c PMPatch/Tiano/TianoDecompress.c -o TianoDecompress.release.o
 gcc -O2 -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.release.o
 
+
+echo Building patch generator manifest
+windres --input=patchgen.rc --input-format=rc --output=patchgen.res --output-format=coff
 echo Building debug patch generator
-gdc -g -fdebug -o p_atchgen.debug.exe patchgen.d Utils.d Patch.d PatchLexer.d PatchParser.d
+gdc -g -fdebug -o patchgen.debug.exe patchgen.d Utils.d Patch.d PatchLexer.d PatchParser.d patchgen.res
 echo Building release patch generator
-gdc -o p_atchgen.release.exe -O1 patchgen.d Utils.d Patch.d PatchLexer.d PatchParser.d
-strip p_atchgen.release.exe
+gdc -o patchgen.release.exe -O1 patchgen.d Utils.d Patch.d PatchLexer.d PatchParser.d patchgen.res
+strip patchgen.release.exe
 
+echo Building patcher manifest
+windres --input=patcher.rc --input-format=rc --output=patcher.res --output-format=coff
 echo Building debug patcher
-gdc -g -fdebug -o p_atcher.debug.exe patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o
-
+gdc -g -fdebug -o patcher.debug.exe patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o patcher.res
 echo Building release patcher
-gdc -o p_atcher.release.exe -O1 patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o
-strip p_atcher.release.exe
+gdc -o patcher.release.exe -O1 patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o patcher.res
+strip patcher.release.exe
