@@ -3,13 +3,13 @@ import Patch    : Patch;
 import EFI      : EFI, EFIContainer, File, UserInterfaceSection, RawSection;
 import EFIUtils : find, findAll, printEFI, printFileMapping;
 
-import std.stdio : writefln, write;
-import std.file : read, filewrite = write;
+import std.stdio     : writefln, write;
+import std.file      : read, filewrite = write;
 import std.exception : enforce;
-import std.string : format;
+import std.string    : format;
 
 int main(string[] args) {
-  Console.Init(args);
+  Console.Init(args, format("USAGE: %s <INPUT WPH> <OUTPUT WPH> <PATCH FILE>", args[0]));
   string file = Console.GetInput!string("Please enter a filename");
 
   auto container = EFI.parseCapsule(file);
@@ -17,17 +17,19 @@ int main(string[] args) {
   debug printFileMapping(container);
 
   //Sanity check
-  ubyte[] newEFI = EFI.getBinary(container);
-  ubyte[] oldEFI = cast(ubyte[])read(file);
-  enforce(newEFI.length == oldEFI.length);
-  debug enforce(newEFI == oldEFI);
+  debug {
+    ubyte[] newEFI = EFI.getBinary(container);
+    ubyte[] oldEFI = cast(ubyte[])read(file);
+    enforce(newEFI.length == oldEFI.length);
+    enforce(newEFI == oldEFI);
+  }
 
   string outfile   = Console.GetInput!string("Please enter an output filename");
   string patchfile = Console.GetInput!string("Please enter a patch filename");
   Patch[] patches  = Patch.fromBinary(cast(ubyte[])read(patchfile));
   patch(container, patches);
   ubyte[] modEFI = EFI.getBinary(container);
-  enforce(modEFI.length == oldEFI.length);
+  enforce(modEFI.length == read(file).length);
   filewrite(outfile, modEFI);
 
   return 0;

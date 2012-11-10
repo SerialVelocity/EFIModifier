@@ -10,16 +10,17 @@ private {
 
 class Console {
   string[] args;
-  this(string[] args) {
-    if(args == null || args.length <= 1) {
+  this(string[] args, string help) {
+    if(args == null || args.length <= 1 || args[1] == "-h" || args[1] == "--help" || args[1] == "/?") {
       this.args.length = 0;
+      writeln(help);
     } else {
       this.args = args[1..$];
     }
   }
 
-  static void Init(string[] args) {
-    console = new Console(args);
+  static void Init(string[] args, string help) {
+    console = new Console(args, help);
   }
 
   static T GetInput(T)(string question) {

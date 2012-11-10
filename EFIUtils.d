@@ -29,8 +29,8 @@ T find(T)(EFIContainer container) {
 T[] findAll(T)(EFIContainer container) {
   File[] found;
   foreach(ref c; container.containers) {
-    if(typeid(container) == typeid(T))
-      found ~= cast(T)container;
+    if(typeid(c) == typeid(T))
+      found ~= cast(T)c;
     found ~= findAll!T(c);
   }
   return found;
