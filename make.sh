@@ -34,3 +34,21 @@ echo "Building release patcher"
 dmd -release -property -w -O patcher.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofpatcher.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
 strip patcher.release > /dev/null 2>/dev/null
+
+echo "Building debug extractor"
+dmd -debug -gc -property -w extractor.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofextractor.debug
+[[ "$?" -eq 0 ]] || echo "Unable to make debug version"
+
+echo "Building release extractor"
+dmd -release -property -w -O extractor.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofextractor.release
+[[ "$?" -eq 0 ]] || echo "Unable to make release version"
+strip extractor.release > /dev/null 2>/dev/null
+
+echo "Building debug injector"
+dmd -debug -gc -property -w injector.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofinjector.debug
+[[ "$?" -eq 0 ]] || echo "Unable to make debug version"
+
+echo "Building release injector"
+dmd -release -property -w -O injector.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofinjector.release
+[[ "$?" -eq 0 ]] || echo "Unable to make release version"
+strip injector.release > /dev/null 2>/dev/null

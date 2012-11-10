@@ -27,3 +27,19 @@ gdc -g -fdebug -o patcher.debug.exe patcher.d EFI.d EFIHeaders.d Console.d Utils
 echo Building release patcher
 gdc -o patcher.release.exe -O1 patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o patcher.res
 strip patcher.release.exe
+
+echo Building extractor manifest
+windres --input=extractor.rc --input-format=rc --output=extractor.res --output-format=coff
+echo Building debug extractor
+gdc -g -fdebug -o extractor.debug.exe extractor.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o extractor.res
+echo Building release extractor
+gdc -o extractor.release.exe -O1 extractor.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o extractor.res
+strip extractor.release.exe
+
+echo Building injector manifest
+windres --input=injector.rc --input-format=rc --output=injector.res --output-format=coff
+echo Building debug injector
+gdc -g -fdebug -o injector.debug.exe injector.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o injector.res
+echo Building release injector
+gdc -o injector.release.exe -O1 injector.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o injector.res
+strip injector.release.exe
