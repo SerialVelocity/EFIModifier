@@ -18,17 +18,17 @@ gcc -O2 -c PMPatch/Tiano/TianoDecompress.c -o TianoDecompress.release.o || die "
 gcc -O2 -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.release.o || die "Couldn't build release compression object"
 
 echo "Building debug patch generator"
-dmd -debug -gc -w patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d -ofpatchgen.debug
+dmd -debug -gc -property -w patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d -ofpatchgen.debug
 [[ "$?" -eq 0 ]] || echo "Unable to make debug version"
 
 echo "Building release patch generator"
-dmd -release -w -nofloat -noboundscheck patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d -ofpatchgen.release
+dmd -release -property -w -O patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d -ofpatchgen.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
 
 echo "Building debug patcher"
-dmd -debug -gc -property -w main.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofmain.debug
+dmd -debug -gc -property -w patcher.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofpatcher.debug
 [[ "$?" -eq 0 ]] || echo "Unable to make debug version"
 
 echo "Building release patcher"
-dmd -release -property -w -nofloat -noboundscheck main.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofmain.release
+dmd -release -property -w -O patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofpatcher.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"

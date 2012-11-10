@@ -18,8 +18,8 @@ gdc -o p_atchgen.release.exe -O1 patchgen.d Utils.d Patch.d PatchLexer.d PatchPa
 strip p_atchgen.release.exe
 
 echo Building debug patcher
-gdc -g -fdebug -o main.debug.exe main.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o
+gdc -g -fdebug -o p_atcher.debug.exe patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o
 
 echo Building release patcher
-gdc -o main.release.exe -O1 main.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o
-strip main.release.exe
+gdc -o p_atcher.release.exe -O1 patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o
+strip p_atcher.release.exe
