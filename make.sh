@@ -24,11 +24,13 @@ dmd -debug -gc -property -w patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.
 echo "Building release patch generator"
 dmd -release -property -w -O patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d -ofpatchgen.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
+strip patchgen.release > /dev/null 2>/dev/null
 
 echo "Building debug patcher"
-dmd -debug -gc -property -w patcher.d EFI.d EFIHeaders.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofpatcher.debug
+dmd -debug -gc -property -w patcher.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofpatcher.debug
 [[ "$?" -eq 0 ]] || echo "Unable to make debug version"
 
 echo "Building release patcher"
-dmd -release -property -w -O patcher.d EFI.d EFIHeaders.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofpatcher.release
+dmd -release -property -w -O patcher.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofpatcher.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
+strip patcher.release > /dev/null 2>/dev/null

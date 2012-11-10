@@ -8,7 +8,8 @@ private {
   import std.string    : format;
   import std.stdio     : stderr;
   import std.zlib      : crc32;
-  import Utils         : toStruct, fromStruct, calculateChecksum;
+  import Utils         : toStruct, fromStruct;
+  import EFIUtils      : calculateChecksum;
 
   EFIGUID ZeroGUID     = EFIGUID(0x00000000, 0x0000, 0x0000, [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
   EFIGUID PadGUID      = EFIGUID(0xFFFFFFFF, 0xFFFF, 0xFFFF, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
@@ -25,9 +26,13 @@ private {
   extern(C) int TianoCompress(void *src, uint srcSize, void *dst, uint *dstSize);
 }
 
-import EFIHeaders;
+public import EFIHeaders;
 
 class EFI {
+  static ubyte[] getBinary(EFIContainer container) {
+    return container.getBinary();
+  }
+
   static ubyte[] getBinary(EFIContainer[] containers) {
     ubyte[] data;
 
@@ -40,6 +45,12 @@ class EFI {
       data ~= (cast(Padding)containers[$-1]).getBinary(data.length);
 
     return data;
+  }
+
+  static EFIContainer parseCapsule(string filename) {
+    auto containers = parse(filename);
+    enforce(containers.length == 1 && typeid(containers[0]) == typeid(Capsule));
+    return containers[0];
   }
 
   static EFIContainer[] parse(string filename) {

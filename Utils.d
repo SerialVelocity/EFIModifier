@@ -49,11 +49,3 @@ ubyte[] fromStruct(const void *ptr, size_t len) {
   copy[] = (cast(ubyte*)ptr)[0..len];
   return copy;
 }
-
-T calculateChecksum(T)(void *_ptr, ulong len, T start = 0) {
-  len /= T.sizeof;
-  T *ptr = cast(T*)_ptr;
-  foreach(i; 0..len)
-    start -= ptr[i];
-  return start;
-}
