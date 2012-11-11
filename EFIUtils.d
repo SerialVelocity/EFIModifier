@@ -5,7 +5,7 @@ private {
   import std.stdio : write, writefln;
 }
 
-T calculateChecksum(T)(void *_ptr, ulong len, T start = 0) {
+T calculateChecksum(T)(void *_ptr, size_t len, T start = 0) {
   len /= T.sizeof;
   T *ptr = cast(T*)_ptr;
   foreach(i; 0..len)
