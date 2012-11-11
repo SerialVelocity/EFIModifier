@@ -36,12 +36,15 @@ int main(string[] args) {
     else
       name = ui.fileName;
 
-    ubyte[] data;
+    name = dumpdir ~ "/" ~ name;
+    enforce(exists(name));
+    auto data = cast(ubyte[])read(name);
+
     if(raw is null) {
       switch(file.header.type) {
       case FileType.Freeform:
       case FileType.Application:
-	data = file.data;
+	file.data = data;
 	break;
       case FileType.Raw:
 	//Workaround for bug
@@ -49,7 +52,7 @@ int main(string[] args) {
 	if(file.containers.length == 1) {
 	  foreach(c; file.containers)
 	    if(typeid(c) == typeid(Unknown))
-	      data = file.data;
+	      file.data = data;
 	    else
 	      goto default;
 	}
@@ -60,14 +63,8 @@ int main(string[] args) {
 	continue;
       }
     } else {
-      data = raw.data;
+      raw.data = data;
     }
-
-    name = dumpdir ~ "/" ~ name;
-    enforce(exists(name));
-    auto newData = cast(ubyte[])read(name);
-    enforce(newData.length == data.length);
-    data[] = newData;
   }
 
   auto modfile = filename ~ ".mod";

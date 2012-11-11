@@ -9,7 +9,6 @@ private {
 
 abstract class EFIContainer {
   EFIContainer[] containers;
-  ubyte[] padding;
   size_t offset;
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0);

@@ -89,24 +89,11 @@ class EFI {
       //Either file or section (so far)
       uint alignment = 0;
       ubyte padFill  = 0;
-      if(parseSection) {
+      if(parseSection)
 	containers ~= Section.parse(data, offset);
-	alignment   = sectionAlignment;
-	padFill     = sectionPadFill;
-      } else {
+      else
 	containers ~= File.parse(data, offset);
-	alignment   = fileAlignment;
-	padFill     = filePadFill;
-      }
       size_t len = containers[$-1].length();
-      if(len % alignment != 0 && data.length != len) {
-	size_t needed = alignment - len % alignment;
-	enforce(data.length >= len + needed);
-	containers[$-1].padding = data[len..len + needed];
-	foreach(ref b; data[len..len + needed])
-	  enforce(b == padFill);
-	len += needed;
-      }
       return EFI.parse(data[len..$], offset + len, parseSection, containers);
     }
     } catch(Exception e) {
@@ -120,13 +107,12 @@ class EFI {
 
 class Capsule : EFIContainer {
   CapsuleHeader header;
-  ubyte[] original;
 
   override
   ubyte[] getBinary() {
     ubyte[] data = fromStruct(&header, header.sizeof);
     data        ~= EFI.getBinary(containers);
-    data        ~= padding;
+    enforce(data.length == header.imageSize);
     return data;
   }
 
@@ -171,7 +157,7 @@ class Padding : EFIContainer {
     foreach(ref ch; data)
       ch = 0xFF;
 
-    return data ~ padding;
+    return data;
   }
 
   ubyte[] getBinary(size_t offset) {
@@ -180,7 +166,7 @@ class Padding : EFIContainer {
     foreach(ref ch; data)
       ch = 0xFF;
 
-    return data ~ padding;
+    return data;
   }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
@@ -219,7 +205,7 @@ class Unknown : EFIContainer {
 
   override
   ubyte[] getBinary() {
-    return data ~ padding;
+    return data;
   }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
@@ -269,7 +255,9 @@ class Volume : EFIContainer {
     foreach(block; blocks)
       data ~= fromStruct(&block, block.sizeof);
 
-    return data ~ tail ~ padding;
+    enforce(data.length + tail.length == header.volumeSize);
+
+    return data ~ tail;
   }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
@@ -300,7 +288,7 @@ class Volume : EFIContainer {
     enforce(volume.header.headerSize == pos);
 
     volume.containers = EFI.parse(volume.data, 0);
-    enforce(reduce!((x, y) => x + y.length() + y.padding.length)(cast(size_t)0, volume.containers)
+    enforce(reduce!((x, y) => x + y.length())(cast(size_t)0, volume.containers)
             == volume.header.volumeSize - pos);
     return volume;
   }
@@ -352,8 +340,14 @@ class File : EFIContainer {
     header.checksum = (tailCheck << 8) | headCheck;
     header.state    = state;
 
-    ubyte[] data = fromStruct(&header, header.sizeof);
-    return data ~ tail ~ padding;
+    ubyte[] data = fromStruct(&header, header.sizeof) ~ tail;
+    if(data.length % fileAlignment != 0) {
+      ubyte[] padding = new ubyte[fileAlignment - data.length % fileAlignment];
+      foreach(ref pad; padding)
+	pad = filePadFill;
+      data ~= padding;
+    }
+    return data;
   }
 
   static auto parse(ubyte[] data, size_t offset = 0) {
@@ -392,7 +386,10 @@ class File : EFIContainer {
 
   @property override
   size_t length() {
-    return header.fileSize;
+    if(header.fileSize % fileAlignment == 0)
+      return header.fileSize;
+    else
+      return header.fileSize + (fileAlignment - header.fileSize % fileAlignment);
   }
 
   @property override
@@ -428,12 +425,11 @@ class CompressedSection : Section {
       throw new Exception("Unknown compression!");
     }
 
-    header.fileSize = cast(uint)(header.sizeof + header2.sizeof + tail.length + padding.length);
+    header.fileSize = cast(uint)(header.sizeof + header2.sizeof + tail.length);
 
     ubyte[] data = fromStruct(&header, header.sizeof);
     data        ~= fromStruct(&header2, header2.sizeof);
     data        ~= tail;
-    data        ~= padding;
     return data;
   }
 
@@ -472,12 +468,14 @@ class ExtendedSection : Section {
 
   override
   ubyte[] getBinary() {
-    ubyte[] tail = EFI.getBinary(containers) ~ padding;
+    ubyte[] tail = EFI.getBinary(containers);
     header2.crc32 = crc32(0, tail);
+    header.fileSize = cast(uint)(header.sizeof + header2.sizeof + tail.length);
 
     ubyte[] data = fromStruct(&header, header.sizeof);
     data        ~= fromStruct(&header2, header2.sizeof);
     data        ~= tail;
+    data        ~= getPadding();
     return data;
   }
 
@@ -507,7 +505,8 @@ class RawSection : Section {
 
   override
   ubyte[] getBinary() {
-    return fromStruct(&header, header.sizeof) ~ data ~ padding;
+    header.fileSize = cast(uint)(header.sizeof + data.length);
+    return fromStruct(&header, header.sizeof) ~ data ~ getPadding();
   }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
@@ -528,7 +527,8 @@ class UserInterfaceSection : Section {
 
   override
   ubyte[] getBinary() {
-    return fromStruct(&header, header.sizeof) ~ data ~ padding;
+    header.fileSize = cast(uint)(header.sizeof + data.length);
+    return fromStruct(&header, header.sizeof) ~ data ~ getPadding();
   }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
@@ -554,9 +554,10 @@ class UserInterfaceSection : Section {
 class FVISection : Section {
   override
   ubyte[] getBinary() {
+    ubyte[] tail = EFI.getBinary(containers);
+    header.fileSize = cast(uint)(header.sizeof + tail.length);
     ubyte[] data = fromStruct(&header, header.sizeof);
-    data ~= EFI.getBinary(containers);
-    return data ~ padding;
+    return data ~ tail ~ getPadding();
   }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
@@ -572,6 +573,7 @@ class FVISection : Section {
 
 abstract class Section : EFIContainer {
   SectionHeader header;
+  size_t datalen;
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
@@ -580,22 +582,36 @@ abstract class Section : EFIContainer {
     toStruct(data, &header, header.sizeof);
     enforce(header.fileSize <= data.length);
 
+    EFIContainer section;
     switch(header.type) {
     case SectionType.Compressed:
-      return CompressedSection.parse(data, offset);
+      section = CompressedSection.parse(data, offset);
+      break;
     case SectionType.FirmwareVolumeImage:
-      return FVISection.parse(data, offset);
+      section = FVISection.parse(data, offset);
+      break;
     case SectionType.GUIDDefined:
-      return ExtendedSection.parse(data, offset);
+      section = ExtendedSection.parse(data, offset);
+      break;
     case SectionType.UserInterface:
-      return UserInterfaceSection.parse(data, offset);
+      section = UserInterfaceSection.parse(data, offset);
+      break;
     default:
     case SectionType.DxeDepex:
     case SectionType.PeiDepex:
     case SectionType.PE32:
     case SectionType.Raw:
-      return RawSection.parse(data, offset);
+      section = RawSection.parse(data, offset);
+      break;
     }
+
+    size_t padded = header.fileSize + (sectionAlignment - header.fileSize % sectionAlignment);
+    if(header.fileSize % sectionAlignment == 0 || padded > data.length)
+      (cast(Section)section).datalen = header.fileSize;
+    else
+      (cast(Section)section).datalen = padded;
+
+    return section;
   }
 
   @property override
@@ -605,11 +621,20 @@ abstract class Section : EFIContainer {
 
   @property override
   size_t length() {
-    return header.fileSize;
+    return datalen;
   }
 
   @property override
   EFIGUID guid() {
     return ZeroGUID;
+  }
+
+  private ubyte[] getPadding() {
+    if(header.fileSize == length())
+      return [];
+    ubyte[] padding = new ubyte[length() - header.fileSize];
+    foreach(ref pad; padding)
+      pad = sectionPadFill;
+    return padding;
   }
 }
