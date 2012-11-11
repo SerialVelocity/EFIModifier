@@ -24,6 +24,18 @@ private {
 
   extern(C) int TianoDecompress(void *src, uint srcSize, void *dst, uint dstSize, void *scratch, uint scratchSize);
   extern(C) int TianoCompress(void *src, uint srcSize, void *dst, uint *dstSize);
+
+  size_t getPaddingLength(size_t offset, uint alignment) {
+    return (alignment - offset % alignment) % alignment;
+  }
+
+  ubyte[] generatePadding(size_t offset, uint alignment, ubyte fill) {
+    ubyte[] padding = new ubyte[getPaddingLength(offset, alignment)];
+    foreach(ref b; padding)
+      b = fill;
+
+    return padding;
+  }
 }
 
 public import EFIHeaders;
@@ -36,13 +48,16 @@ class EFI {
   static ubyte[] getBinary(EFIContainer[] containers) {
     ubyte[] data;
 
-    foreach(ref container; containers[0..$-1])
-      data ~= container.getBinary();
-
-    if(typeid(containers[$-1]) != typeid(Padding))
-      data ~= containers[$-1].getBinary();
-    else
-      data ~= (cast(Padding)containers[$-1]).getBinary(data.length);
+    foreach(i, ref container; containers) {
+      if(i > 0 && cast(File)container && cast(File)containers[i - 1])
+	data ~= generatePadding(data.length, fileAlignment, filePadFill);
+      else if(i > 0 && cast(Section)container && cast(Section)containers[i - 1])
+	  data ~= generatePadding(data.length, sectionAlignment, sectionPadFill);
+      if(i + 1 == containers.length && cast(Padding)container)
+	data ~= (cast(Padding)containers[$-1]).getBinary(data.length);
+      else
+	data ~= container.getBinary();
+    }
 
     return data;
   }
@@ -87,12 +102,29 @@ class EFI {
       return EFI.parse(data[len..$], offset + len, parseSection, containers);
     } else {
       //Either file or section (so far)
-      uint alignment = 0;
-      ubyte padFill  = 0;
-      if(parseSection)
+      if(parseSection) {
+	if(containers.length > 0 && cast(Section)containers[$ - 1]) {
+	  size_t mod = getPaddingLength(offset, sectionAlignment);
+	  offset += mod;
+	  foreach(ref b; data[0..mod])
+	    enforce(b == sectionPadFill);
+	  data = data[mod..$];
+	}
+	if(data.length == 0)
+	  return containers;
 	containers ~= Section.parse(data, offset);
-      else
+      } else {
+	if(containers.length > 0 && cast(File)containers[$ - 1]) {
+	  size_t mod = getPaddingLength(offset, fileAlignment);
+	  offset += mod;
+	  foreach(ref b; data[0..mod])
+	    enforce(b == filePadFill);
+	  data = data[mod..$];
+	}
+	if(data.length == 0)
+	  return containers;
 	containers ~= File.parse(data, offset);
+      }
       size_t len = containers[$-1].length();
       return EFI.parse(data[len..$], offset + len, parseSection, containers);
     }
@@ -288,8 +320,8 @@ class Volume : EFIContainer {
     enforce(volume.header.headerSize == pos);
 
     volume.containers = EFI.parse(volume.data, 0);
-    enforce(reduce!((x, y) => x + y.length())(cast(size_t)0, volume.containers)
-            == volume.header.volumeSize - pos);
+    //enforce(reduce!((x, y) => x + y.length())(cast(size_t)0, volume.containers)
+    //        == volume.header.volumeSize - pos);
     return volume;
   }
 
@@ -341,12 +373,6 @@ class File : EFIContainer {
     header.state    = state;
 
     ubyte[] data = fromStruct(&header, header.sizeof) ~ tail;
-    if(data.length % fileAlignment != 0) {
-      ubyte[] padding = new ubyte[fileAlignment - data.length % fileAlignment];
-      foreach(ref pad; padding)
-	pad = filePadFill;
-      data ~= padding;
-    }
     return data;
   }
 
@@ -386,10 +412,7 @@ class File : EFIContainer {
 
   @property override
   size_t length() {
-    if(header.fileSize % fileAlignment == 0)
-      return header.fileSize;
-    else
-      return header.fileSize + (fileAlignment - header.fileSize % fileAlignment);
+    return header.fileSize;
   }
 
   @property override
@@ -465,17 +488,18 @@ class CompressedSection : Section {
 
 class ExtendedSection : Section {
   ExtendedSectionHeader header2;
+  ubyte[] data;
 
   override
   ubyte[] getBinary() {
     ubyte[] tail = EFI.getBinary(containers);
+    tail ~= generatePadding(header.sizeof + header2.sizeof + tail.length, sectionAlignment, sectionPadFill);
     header2.crc32 = crc32(0, tail);
     header.fileSize = cast(uint)(header.sizeof + header2.sizeof + tail.length);
 
     ubyte[] data = fromStruct(&header, header.sizeof);
     data        ~= fromStruct(&header2, header2.sizeof);
     data        ~= tail;
-    data        ~= getPadding();
     return data;
   }
 
@@ -489,6 +513,7 @@ class ExtendedSection : Section {
     toStruct(data, &section.header, header.sizeof);
     toStruct(data[header.sizeof..dataStart], &section.header2, header2.sizeof);
     enforce(section.header.fileSize <= data.length);
+    section.data = data[section.header2.offset..section.header.fileSize];
 
     section.containers = EFI.parse(data[section.header2.offset..section.header.fileSize], 0, 1);
     return section;
@@ -506,7 +531,7 @@ class RawSection : Section {
   override
   ubyte[] getBinary() {
     header.fileSize = cast(uint)(header.sizeof + data.length);
-    return fromStruct(&header, header.sizeof) ~ data ~ getPadding();
+    return fromStruct(&header, header.sizeof) ~ data;
   }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
@@ -528,7 +553,7 @@ class UserInterfaceSection : Section {
   override
   ubyte[] getBinary() {
     header.fileSize = cast(uint)(header.sizeof + data.length);
-    return fromStruct(&header, header.sizeof) ~ data ~ getPadding();
+    return fromStruct(&header, header.sizeof) ~ data;
   }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
@@ -557,7 +582,7 @@ class FVISection : Section {
     ubyte[] tail = EFI.getBinary(containers);
     header.fileSize = cast(uint)(header.sizeof + tail.length);
     ubyte[] data = fromStruct(&header, header.sizeof);
-    return data ~ tail ~ getPadding();
+    return data ~ tail;
   }
 
   static EFIContainer parse(ubyte[] data, size_t offset = 0) {
@@ -573,7 +598,6 @@ class FVISection : Section {
 
 abstract class Section : EFIContainer {
   SectionHeader header;
-  size_t datalen;
 
   static auto parse(ubyte[] data, size_t offset = 0) {
     enforce(data.length >= header.sizeof);
@@ -605,12 +629,6 @@ abstract class Section : EFIContainer {
       break;
     }
 
-    size_t padded = header.fileSize + (sectionAlignment - header.fileSize % sectionAlignment);
-    if(header.fileSize % sectionAlignment == 0 || padded > data.length)
-      (cast(Section)section).datalen = header.fileSize;
-    else
-      (cast(Section)section).datalen = padded;
-
     return section;
   }
 
@@ -621,20 +639,11 @@ abstract class Section : EFIContainer {
 
   @property override
   size_t length() {
-    return datalen;
+    return header.fileSize;
   }
 
   @property override
   EFIGUID guid() {
     return ZeroGUID;
-  }
-
-  private ubyte[] getPadding() {
-    if(header.fileSize == length())
-      return [];
-    ubyte[] padding = new ubyte[length() - header.fileSize];
-    foreach(ref pad; padding)
-      pad = sectionPadFill;
-    return padding;
   }
 }
