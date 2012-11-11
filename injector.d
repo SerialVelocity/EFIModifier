@@ -8,7 +8,7 @@ import std.exception : enforce;
 import std.string    : format;
 
 int main(string[] args) {
-  Console.Init(args, format("USAGE: %s <ORIGINAL WPH>", args[0]));
+  Console.Init(args, format("USAGE: %s <ORIGINAL WPH> <OUTPUT WPH>", args[0]));
   string filename = Console.GetInput!string("Please enter a filename");
 
   auto container = EFI.parseCapsule(filename);
@@ -67,7 +67,7 @@ int main(string[] args) {
     }
   }
 
-  auto modfile = filename ~ ".mod";
+  string modfile = Console.GetInput!string("Please enter an output filename");
   if(modfile.exists()) {
     stderr.writefln("ERROR: \"%s\" exists already. To regenerate the file, delete it", modfile);
     return 1;
