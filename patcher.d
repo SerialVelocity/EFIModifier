@@ -51,10 +51,8 @@ void patch(EFIContainer container, Patch[] patches) {
 	      raw.data[i..i + patch.search.length] = patch.replace;
 	    }
 	  }
-	  if(found)
-	    writefln("%s - Patched %u occurrences", patch.name, found);
-	  else
-	    writefln("%s - Failed", patch.name);
+	  enforce(found == patch.occurs, format("%s - Failed. Patched %d/%d", patch.name, found, patch.occurs));
+	  writefln("%s - Patched %u occurrences", patch.name, found);
 	}
       }
     }

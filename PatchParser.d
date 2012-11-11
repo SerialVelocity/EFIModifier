@@ -1,9 +1,10 @@
 module PatchParser;
 
 private {
-  import std.conv   : to;
-  import std.string : format;
-  import Patch      : Patch, PatchToken, PatchTokenType;
+  import std.conv      : to;
+  import std.exception : enforce;
+  import std.string    : format;
+  import Patch         : Patch, PatchToken, PatchTokenType;
 
   auto crunch(PatchTokenType type, ref PatchToken[] tokens) {
     if(tokens[0].type != type)
@@ -37,6 +38,7 @@ private:
 
   Patch parsePatch() {
     Patch patch;
+    bool occurs;
 
     crunch(PatchTokenType.OpenCurly, tokens);
 
@@ -46,22 +48,37 @@ private:
 
       switch(keyword.str) {
       case "Name":
+	enforce(patch.name == null, "Already specified patch name");
 	patch.name = crunch(PatchTokenType.String, tokens).str;
 	break;
       case "File":
+	enforce(patch.file is null, "Already specified file name");
 	patch.file = crunch(PatchTokenType.String, tokens).str;
 	break;
       case "Search":
+	enforce(patch.search is null, "Already specified search list");
 	patch.search = parseList();
 	break;
       case "Replace":
+	enforce(patch.replace is null, "Already specified replace list");
 	patch.replace = parseList();
+	break;
+      case "Occurs":
+	enforce(!occurs, "Already specified amount of occurrences");
+	occurs = true;
+	patch.occurs = to!int(crunch(PatchTokenType.Keyword, tokens).str);
 	break;
       default:
 	throw new Exception("Unknown header: " ~ keyword.str);
       }
     }
 
+    enforce(patch.name !is null, "Patch is missing a patch name");
+    enforce(patch.file !is null, "Patch is missing a file name");
+    enforce(patch.search !is null, "Patch is missing a search list");
+    enforce(patch.replace !is null, "Patch is missing a replace list");
+    enforce(occurs, "Patch is missing an amount of occurrences");
+    enforce(patch.search.length == patch.replace.length, "Search and replace lists must be the same size");
     crunch(PatchTokenType.CloseCurly, tokens);
     return patch;
   }

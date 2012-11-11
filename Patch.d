@@ -1,8 +1,10 @@
 module Patch;
 
 private {
-  import std.conv : to;
-  import Utils    : toStruct, fromStruct;
+  import std.conv      : to;
+  import std.exception : enforce;
+  import std.zlib      : crc32, compress, uncompress;
+  import Utils         : toStruct, fromStruct;
 }
 
 enum PatchTokenType {
@@ -25,11 +27,20 @@ struct PatchToken {
   }
 }
 
+const uint PatchCurrentVersion = 1;
+struct PatchHeader {
+  uint patchVersion;
+  uint length;
+  uint crc32;
+}
+
 struct Patch {
+  PatchHeader header;
   string name;
   string file;
   ubyte[] search;
   ubyte[] replace;
+  int occurs;
 
   ubyte[] toBinary() {
     ubyte[] data;
@@ -49,44 +60,61 @@ struct Patch {
     data ~= fromStruct(&len, len.sizeof);
     data ~= replace;
 
-    return data;
+    data ~= fromStruct(&occurs, occurs.sizeof);
+
+    data                = cast(ubyte[])compress(data);
+    header.patchVersion = PatchCurrentVersion;
+    header.length       = cast(uint)data.length;
+    header.crc32        = crc32(0, data);
+
+    return fromStruct(&header, header.sizeof) ~ data;
   }
 
   static Patch[] fromBinary(ubyte[] data) {
     Patch patch;
     uint len;
-    size_t offset = 0;
     char[] name, file;
 
     if(data.length == 0)
       return [];
 
-    toStruct(data[offset..$], &len, len.sizeof);
+    toStruct(data[0..$], &patch.header, header.sizeof);
+    enforce(patch.header.patchVersion == PatchCurrentVersion, "Unknown patch version, please update the patch and program");
+    enforce(header.sizeof + patch.header.length <= data.length, "Malformed patch");
+    enforce(crc32(0, data[header.sizeof..header.sizeof + patch.header.length]) == patch.header.crc32, "Corrupted patch");
+
+    ubyte[] patchdata = cast(ubyte[])uncompress(data[header.sizeof..header.sizeof + patch.header.length]);
+    size_t offset = 0;
+
+    toStruct(patchdata[offset..$], &len, len.sizeof);
     offset += len.sizeof;
     name.length = len;
-    toStruct(data[offset..$], name.ptr, len);
+    toStruct(patchdata[offset..$], name.ptr, len);
     offset += len;
     patch.name = to!string(name);
 
-    toStruct(data[offset..$], &len, len.sizeof);
+    toStruct(patchdata[offset..$], &len, len.sizeof);
     offset += len.sizeof;
     file.length = len;
-    toStruct(data[offset..$], file.ptr, len);
+    toStruct(patchdata[offset..$], file.ptr, len);
     offset += len;
     patch.file = to!string(file);
 
-    toStruct(data[offset..$], &len, len.sizeof);
+    toStruct(patchdata[offset..$], &len, len.sizeof);
     offset += len.sizeof;
     patch.search.length = len;
-    toStruct(data[offset..$], patch.search.ptr, len);
+    toStruct(patchdata[offset..$], patch.search.ptr, len);
     offset += len;
 
-    toStruct(data[offset..$], &len, len.sizeof);
+    toStruct(patchdata[offset..$], &len, len.sizeof);
     offset += len.sizeof;
     patch.replace.length = len;
-    toStruct(data[offset..$], patch.replace.ptr, len);
+    toStruct(patchdata[offset..$], patch.replace.ptr, len);
     offset += len;
 
-    return patch ~ fromBinary(data[offset..$]);
+    toStruct(patchdata[offset..$], &patch.occurs, occurs.sizeof);
+    offset += occurs.sizeof;
+
+    return patch ~ fromBinary(data[header.sizeof + patch.header.length..$]);
   }
 }

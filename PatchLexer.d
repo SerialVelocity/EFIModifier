@@ -23,6 +23,11 @@ class PatchLexer {
       return PatchToken(PatchTokenType.Equals) ~ lex(input[1..$]);
     if(input[0] == ',')
       return PatchToken(PatchTokenType.Comma) ~ lex(input[1..$]);
+    if(input[0] == '@') {
+      while(input.length > 0 && input[0] != '\r' && input[0] != '\n')
+	input = input[1..$];
+      return lex(input);
+    }
     if(isAlphaNum(input[0])) {
       string str = "";
       while(input.length > 0 && isAlphaNum(input[0])) {
