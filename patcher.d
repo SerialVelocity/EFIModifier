@@ -2,6 +2,7 @@ import Console  : Console;
 import Patch    : Patch;
 import EFI      : EFI, EFIContainer, File, UserInterfaceSection, RawSection;
 import EFIUtils : find, findAll, printEFI, printFileMapping;
+import Utils    : patchData;
 
 import std.stdio     : writefln, write;
 import std.file      : read, filewrite = write;
@@ -35,24 +36,28 @@ int main(string[] args) {
   return 0;
 }
 
+ref ubyte[] getData(File file) {
+  auto raw  = find!RawSection(file);
+  if(raw !is null)
+    return raw.data;
+  else
+    return file.data;
+}
+
 void patch(EFIContainer container, Patch[] patches) {
   foreach(file; findAll!File(container)) {
     auto name = find!UserInterfaceSection(file);
-    auto raw  = find!RawSection(file);
 
-    if(name !is null && raw !is null) {
-      foreach(patch; patches) {
-	if(name.fileName == patch.file) {
-	  uint found = 0;
-	  writefln("%s - Patching %s...", patch.name, name.fileName);
-	  foreach(i; 0..raw.data.length - patch.search.length) {
-	    if(raw.data[i..i + patch.search.length] == patch.search) {
-	      ++found;
-	      raw.data[i..i + patch.search.length] = patch.replace;
-	    }
-	  }
+    foreach(patch; patches) {
+      if((patch.file !is null && name !is null && name.fileName == patch.file) || patch.guid == file.guid) {
+	writefln("%s - Patching %s...", patch.name, patch.file ? patch.file : patch.guid.toString());
+	if(patch.fileReplace is null) {
+	  auto found = patchData(getData(file), patch.search, patch.replace);
 	  enforce(found == patch.occurs, format("%s - Failed. Patched %d/%d", patch.name, found, patch.occurs));
 	  writefln("%s - Patched %u occurrences", patch.name, found);
+	} else {
+	  getData(file) = patch.fileReplace;
+	  writefln("%s - Patched whole file", patch.name);
 	}
       }
     }

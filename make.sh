@@ -18,11 +18,11 @@ gcc -O2 -c PMPatch/Tiano/TianoDecompress.c -o TianoDecompress.release.o || die "
 gcc -O2 -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.release.o || die "Couldn't build release compression object"
 
 echo "Building debug patch generator"
-dmd -debug -gc -property -w patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d -ofpatchgen.debug
+dmd -debug -gc -property -w patchgen.d Patch.d PatchLexer.d PatchParser.d EFIHeaders.d Utils.d -ofpatchgen.debug
 [[ "$?" -eq 0 ]] || echo "Unable to make debug version"
 
 echo "Building release patch generator"
-dmd -release -property -w -O patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d -ofpatchgen.release
+dmd -release -property -w -O patchgen.d Patch.d PatchLexer.d PatchParser.d EFIHeaders.d Utils.d -ofpatchgen.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
 strip patchgen.release > /dev/null 2>/dev/null
 

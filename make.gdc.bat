@@ -15,9 +15,9 @@ gcc -O2 -c PMPatch/Tiano/TianoCompress.c -o TianoCompress.release.o
 echo Building patch generator manifest
 windres --input=patchgen.rc --input-format=rc --output=patchgen.res --output-format=coff
 echo Building debug patch generator
-gdc -g -fdebug -o patchgen.debug.exe patchgen.d Utils.d Patch.d PatchLexer.d PatchParser.d patchgen.res
+gdc -g -fdebug -o patchgen.debug.exe patchgen.d EFIHeaders.d Utils.d Patch.d PatchLexer.d PatchParser.d patchgen.res
 echo Building release patch generator
-gdc -o patchgen.release.exe -O1 patchgen.d Utils.d Patch.d PatchLexer.d PatchParser.d patchgen.res
+gdc -o patchgen.release.exe -O1 patchgen.d EFIHeaders.d Utils.d Patch.d PatchLexer.d PatchParser.d patchgen.res
 strip patchgen.release.exe
 
 echo Building patcher manifest

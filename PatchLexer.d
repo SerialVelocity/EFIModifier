@@ -17,6 +17,10 @@ class PatchLexer {
       return PatchToken(PatchTokenType.OpenSquare) ~ lex(input[1..$]);
     if(input[0] == ']')
       return PatchToken(PatchTokenType.CloseSquare) ~ lex(input[1..$]);
+    if(input[0] == '(')
+      return PatchToken(PatchTokenType.OpenRound) ~ lex(input[1..$]);
+    if(input[0] == ')')
+      return PatchToken(PatchTokenType.CloseRound) ~ lex(input[1..$]);
     if(isWhite(input[0]))
       return lex(input[1..$]);
     if(input[0] == '=')

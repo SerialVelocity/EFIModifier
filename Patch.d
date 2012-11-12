@@ -4,10 +4,13 @@ private {
   import std.conv      : to;
   import std.exception : enforce;
   import std.zlib      : crc32, compress, uncompress;
+  import EFIHeaders    : EFIGUID;
   import Utils         : toStruct, fromStruct;
 }
 
 enum PatchTokenType {
+  OpenRound,
+  CloseRound,
   OpenCurly,
   CloseCurly,
   OpenSquare,
@@ -38,8 +41,10 @@ struct Patch {
   PatchHeader header;
   string name;
   string file;
+  EFIGUID guid;
   ubyte[] search;
   ubyte[] replace;
+  ubyte[] fileReplace;
   int occurs;
 
   ubyte[] toBinary() {
@@ -52,6 +57,8 @@ struct Patch {
     data ~= fromStruct(&len, len.sizeof);
     data ~= fromStruct(file.ptr, file.length);
 
+    data ~= fromStruct(&guid, guid.sizeof);
+
     len = cast(uint)search.length;
     data ~= fromStruct(&len, len.sizeof);
     data ~= search;
@@ -59,6 +66,10 @@ struct Patch {
     len = cast(uint)replace.length;
     data ~= fromStruct(&len, len.sizeof);
     data ~= replace;
+
+    len = cast(uint)fileReplace.length;
+    data ~= fromStruct(&len, len.sizeof);
+    data ~= fileReplace;
 
     data ~= fromStruct(&occurs, occurs.sizeof);
 
@@ -100,6 +111,9 @@ struct Patch {
     offset += len;
     patch.file = to!string(file);
 
+    toStruct(patchdata[offset..$], &patch.guid, guid.sizeof);
+    offset += guid.sizeof;
+
     toStruct(patchdata[offset..$], &len, len.sizeof);
     offset += len.sizeof;
     patch.search.length = len;
@@ -110,6 +124,12 @@ struct Patch {
     offset += len.sizeof;
     patch.replace.length = len;
     toStruct(patchdata[offset..$], patch.replace.ptr, len);
+    offset += len;
+
+    toStruct(patchdata[offset..$], &len, len.sizeof);
+    offset += len.sizeof;
+    patch.fileReplace.length = len;
+    toStruct(patchdata[offset..$], patch.fileReplace.ptr, len);
     offset += len;
 
     toStruct(patchdata[offset..$], &patch.occurs, occurs.sizeof);

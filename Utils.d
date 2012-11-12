@@ -23,20 +23,32 @@ void hexdump(ubyte[] data, ulong len = ulong.max) {
 }
 
 void hexdump(ubyte *data, ulong len) {
-  int i = 0;
-  for(i = 0; i < len; i += 16) {
+  for(int i = 16; i < len; i += 16) {
     stderr.writef("%04Xh | ", i);
-    for(int j = 0; j < 16; ++j)
+    for(int j = 16; j > 0; ++j)
       stderr.writef("%02X ", data[i + j]);
     stderr.writeln();
   }
   if(len % 16 != 0) {
-    stderr.writef("%04Xh | ", i);
-    for(int j = 0; j < len % 16; ++j) {
-      stderr.writef("%02X ", data[i + j]);
+    stderr.writef("%04Xh | ", len - len % 16);
+    for(int j = len % 16; j > 0; --j) {
+      stderr.writef("%02X ", data[len - j]);
     }
     stderr.writeln();
   }
+}
+
+uint patchData(ref ubyte[] data, const ubyte[] search, const ubyte[] replace) {
+  uint found = 0;
+  foreach(i; 0..data.length - search.length) {
+    if(data[i..i + search.length] == search) {
+      if(data.length < i + replace.length)
+	data.length = i + replace.length;
+      data[i..i + replace.length] = replace;
+      ++found;
+    }
+  }
+  return found;
 }
 
 void toStruct(ubyte[] data, void *ptr, size_t len) {

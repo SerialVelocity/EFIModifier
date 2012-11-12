@@ -14,9 +14,9 @@ dmc -o -c PMPatch/Tiano/TianoCompress.c -oTianoCompress.release.obj
 echo Building patch generator manifest
 windres --input=patchgen.rc --input-format=rc --output=patchgen.res -F pe-i386 --output-format=res
 echo Building debug patch generator
-dmd -debug -gc -property -w patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d patchgen.res -ofpatchgen.debug.exe
+dmd -debug -gc -property -w patchgen.d Patch.d PatchLexer.d PatchParser.d EFIHeaders.d Utils.d patchgen.res -ofpatchgen.debug.exe
 echo Building release patch generator
-dmd -release -property -w -O patchgen.d Patch.d PatchLexer.d PatchParser.d Utils.d patchgen.res -ofpatchgen.release.exe
+dmd -release -property -w -O patchgen.d Patch.d PatchLexer.d PatchParser.d EFIHeaders.d Utils.d patchgen.res -ofpatchgen.release.exe
 strip patchgen.release.exe > NUL 2>NUL
 
 echo Building patcher manifest
