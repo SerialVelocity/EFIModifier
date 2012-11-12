@@ -18,11 +18,11 @@ void dwritef(T...)(int depth, T args) {
   writef(args);
 }
 
-void hexdump(ubyte[] data, ulong len = ulong.max) {
+void hexdump(ubyte[] data, size_t len = size_t.max) {
   hexdump(data.ptr, min(data.length * typeof(*data.ptr).sizeof, len));
 }
 
-void hexdump(ubyte *data, ulong len) {
+void hexdump(ubyte *data, size_t len) {
   for(int i = 16; i < len; i += 16) {
     stderr.writef("%04Xh | ", i);
     for(int j = 16; j > 0; ++j)

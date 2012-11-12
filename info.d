@@ -10,13 +10,16 @@ int main(string[] args) {
   Console.Init(args, format("USAGE: %s <INPUT WPH>", args[0]));
   string file = Console.GetInput!string("Please enter a filename");
 
-  auto container = EFI.parseCapsule(file);
-  debug printEFI(container);
-  printFileMapping(container);
+  auto containers = EFI.parse(file);
+
+  foreach(container; containers) {
+    debug printEFI(container);
+    printFileMapping(container);
+  }
 
   //Sanity check
   debug {
-    ubyte[] newEFI = EFI.getBinary(container);
+    ubyte[] newEFI = EFI.getBinary(containers);
     ubyte[] oldEFI = cast(ubyte[])read(file);
     enforce(newEFI.length == oldEFI.length);
     enforce(newEFI == oldEFI);
