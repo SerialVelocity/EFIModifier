@@ -1,3 +1,6 @@
 [submodule "PMPatch"]
 	path = PMPatch
 	url = git://github.com/NikolajSchlej/PMPatch
+[submodule "EFIPatches"]
+	path = EFIPatches
+	url = git://github.com/SerialVelocity/EFIPatches
