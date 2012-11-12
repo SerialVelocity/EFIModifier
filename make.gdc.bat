@@ -43,3 +43,11 @@ gdc -g -fdebug -o injector.debug.exe injector.d EFI.d EFIHeaders.d EFIUtils.d Co
 echo Building release injector
 gdc -o injector.release.exe -O1 injector.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o injector.res
 strip injector.release.exe
+
+echo Building info executable manifest
+windres --input=info.rc --input-format=rc --output=info.res --output-format=coff
+echo Building debug info executable
+gdc -g -fdebug -o info.debug.exe info.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.debug.o TianoCompress.debug.o info.res
+echo Building release info executable
+gdc -o info.release.exe -O1 info.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o info.res
+strip info.release.exe > NUL 2>NUL

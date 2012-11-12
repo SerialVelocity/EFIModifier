@@ -52,3 +52,12 @@ echo "Building release injector"
 dmd -release -property -w -O injector.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofinjector.release
 [[ "$?" -eq 0 ]] || echo "Unable to make release version"
 strip injector.release > /dev/null 2>/dev/null
+
+echo "Building debug info executable"
+dmd -debug -gc -property -w info.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d TianoDecompress.debug.o Patch.d TianoCompress.debug.o -ofinfo.debug
+[[ "$?" -eq 0 ]] || echo "Unable to make debug version"
+
+echo "Building release info executable"
+dmd -release -property -w -O info.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.o TianoCompress.release.o -ofinfo.release
+[[ "$?" -eq 0 ]] || echo "Unable to make release version"
+strip info.release > /dev/null 2>/dev/null

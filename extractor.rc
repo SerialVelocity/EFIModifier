@@ -1,2 +1,2 @@
 #include "winuser.h"
-1 RT_MANIFEST patcher.manifest
+1 RT_MANIFEST extractor.manifest

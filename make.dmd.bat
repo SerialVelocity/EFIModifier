@@ -42,3 +42,11 @@ dmd -debug -gc -property -w injector.d EFI.d EFIHeaders.d EFIUtils.d Console.d U
 echo Building release injector
 dmd -release -property -w -O injector.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.obj TianoCompress.release.obj injector.res -ofinjector.release.exe
 strip injector.release.exe > NUL 2>NUL
+
+echo Building info executable manifest
+windres --input=info.rc --input-format=rc --output=info.res -F pe-i386 --output-format=res
+echo Building debug info executable
+dmd -debug -gc -property -w info.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d TianoDecompress.debug.obj Patch.d TianoCompress.debug.obj info.res -ofinfo.debug
+echo Building release info executable
+dmd -release -property -w -O info.d EFI.d EFIHeaders.d EFIUtils.d Console.d Utils.d Patch.d TianoDecompress.release.obj TianoCompress.release.obj info.res -ofinfo.release.exe
+strip info.release.exe > NUL 2>NUL

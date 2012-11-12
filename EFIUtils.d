@@ -41,6 +41,8 @@ void printFileMapping(EFIContainer container) {
     auto name = find!UserInterfaceSection(file);
     if(name !is null)
       writefln("%s => %s", file.guid, name.fileName);
+    else
+      writefln("%s => <NULL>", file.guid);
   }
 }
 
